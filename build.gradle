@@ -1,0 +1,175 @@
+plugins {
+	id 'com.github.johnrengelman.shadow' version '8.1.1'
+	id 'dev.architectury.loom' version '1.4-SNAPSHOT'
+	id 'maven-publish'
+}
+
+loom {
+	silentMojangMappingsLicense()
+	accessWidenerPath = file("src/main/resources/iris.accesswidener")
+
+	forge {
+		convertAccessWideners = true
+		mixinConfigs = [
+				"mixins.oculus.json",
+				"mixins.oculus.fantastic.json",
+				"mixins.oculus.vertexformat.json",
+				"mixins.oculus.bettermipmaps.json",
+				"mixins.oculus.fixes.maxfpscrash.json",
+				"oculus-batched-entity-rendering.mixins.json",
+				"mixins.oculus.compat.sodium.json",
+				"mixins.oculus.compat.indigo.json",
+				"mixins.oculus.compat.indium.json",
+				"mixins.oculus.compat.dh.json",
+				"mixins.oculus.compat.pixelmon.json"
+		]
+	}
+	mixin.defaultRefmapName = "oculus-mixins-refmap.json"
+}
+
+configurations {
+	shadow {
+		transitive = false
+	}
+}
+
+sourceCompatibility = JavaVersion.VERSION_17
+targetCompatibility = JavaVersion.VERSION_17
+
+archivesBaseName = "${project.archives_base_name}-mc${project.minecraft_version}"
+version = project.mod_version
+group = project.maven_group
+
+sourceSets {
+	desktop {
+	}
+
+	vendored {
+		java {
+			compileClasspath += main.compileClasspath
+		}
+	}
+
+	sodiumCompatibility {
+		java {
+			compileClasspath += main.compileClasspath
+			compileClasspath += main.output
+		}
+	}
+
+	main {
+		java {
+			compileClasspath += vendored.output
+			runtimeClasspath += vendored.output
+		}
+	}
+}
+
+loom {
+	runs {
+		client {
+			mods {
+				oculus {
+					sourceSet sourceSets.desktop
+					sourceSet sourceSets.main
+					sourceSet sourceSets.vendored
+					sourceSet sourceSets.sodiumCompatibility
+				}
+			}
+		}
+	}
+}
+
+repositories {
+	maven {
+		name = "CurseForge"
+		url = "https://cursemaven.com"
+		content {
+			includeGroup "curse.maven"
+		}
+	}
+	maven {
+		name = "Modrinth"
+		url = "https://api.modrinth.com/maven"
+		content {
+			includeGroup "maven.modrinth"
+		}
+	}
+	maven {
+		url "https://maven.blamejared.com/"
+	}
+	maven {
+		url "https://maven.neoforged.net/releases"
+	}
+	mavenCentral()
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${minecraft_version}"
+	mappings loom.officialMojangMappings()
+	forge "net.neoforged:forge:${minecraft_version}-${forge_version}"
+
+	modImplementation "org.embeddedt:embeddium-${minecraft_version}:${embeddium_version}"
+	modCompileOnly("maven.modrinth:distanthorizonsapi:5.0.0")
+
+	forgeRuntimeLibrary(implementation(shadow(project(path: ":glsl-relocated", configuration: "bundledJar")))) {
+		transitive = false
+	}
+	forgeRuntimeLibrary(implementation(include("org.anarres:jcpp:1.4.14")))
+}
+
+processResources {
+	inputs.property "version", project.version
+
+	filesMatching("META-INF/mods.toml") {
+		expand "version": project.version
+	}
+}
+
+shadowJar {
+	configurations = [project.configurations.shadow]
+
+	from jar.archiveFile
+
+	relocate 'org.apache.commons.collections4', 'oculus.org.apache.commons.collections4'
+
+	archiveClassifier.set "shadow"
+
+	manifest {
+		attributes(
+				'Main-Class': 'net.irisshaders.iris.LaunchWarn'
+		)
+	}
+}
+
+remapJar {
+	inputFile.set shadowJar.archiveFile
+	dependsOn shadowJar
+}
+
+jar {
+	from sourceSets.sodiumCompatibility.output
+	from sourceSets.vendored.output
+	from sourceSets.desktop.output
+}
+
+java {
+	withSourcesJar()
+}
+
+sourcesJar {
+	from sourceSets.sodiumCompatibility.allSource
+	from sourceSets.vendored.allSource
+	from sourceSets.desktop.allSource
+}
+
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			from components.java
+		}
+	}
+
+	repositories {
+	}
+}
